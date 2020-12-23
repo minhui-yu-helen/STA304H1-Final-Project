@@ -1,0 +1,306 @@
+---
+title: "Prediction of 2019 Canadian Federal Election Result Useing Logistic Regression with Post-Stratification"
+author: "Minhui Yu"
+date: "December 21st 2020"
+output: pdf_document
+---
+# Prediction of 2019 Canadian Federal Election Result Useing Logistic Regression with Post-Stratification
+
+### Name Author: Minhui Yu
+
+### Date: December 21st 2020
+
+### GitHub Repo
+Code and data supporting this analysis is available at: https://github.com/mawymaggie/STA304PS3
+
+## I. Abstract
+The study examined if the result of 2019 Canada Federal Election will change when "everyone" had voted. We first clean survey data and census data, then build logistic model and use post-stratification. We obtained estimated vote percentage of each party and found that the result of the election will not change if "everyone" had voted. The conclusion is even though some voter abstained, their behavior won't influence overall perspective of the result, but the specific percentage will fluctuate.
+
+## II. Key Words
+Logistic Model, Post-Stratification, 2019 Canadian Federal Election, Liberal Party and  predication.
+
+## III. Introduction
+Statistics is widely used in various disciplines, and with the accelerating process of digitization, people increasingly hope to be able to summarize some empirical laws from a large amount of data to provide some basis for subsequent decision-making. Logistic regression with post-stratification is one of the method to achieve this aim. And it is used for correcting model estimates for known differences between a sample population (the population of the data you have), and a target population (a population you would like to estimate for). Therefore use statistics to build our project is appropriate.
+
+Elections and voting are very important to most countries, and Canada is no exception. In our project, we will build logistic model and use post-stratification to identify how the 2019 Canadian Federal Election would have been different if ‘everyone’ had voted.  Here we have two kinds of data, one is survey data and another one is census data. Survey data is from Canadian Election Survey and census data is from 2017 General Social Survey (GSS). And we assume that there is no significant change in population from 2016 to 2019.
+
+We obtain the vote percentage of Liberal Party is 33.098%, the vote percentage of Conservative Party is 33.895%, the vote percentage of New Democratic Party is 14.991%, the vote percentage of Bloc Québécois is 5.078%, the vote percentage of Green Party is 9.942% and the vote percentage of People's Party is 2.411%. We found that these percentages makes the result of election remain the same, but have difference in each of them. The conclusion is there is a certain percentage of voters with the same background, so those who abstain will not affect the final result.
+
+The first part is Abstract, the second part is keywords, and the third part is introduction. I will describe the two data in part 4, the model made and the post-stratification in part 5. The result part (part 6) will give the explanation of the table and plot in this report. Discussion and limitation will be show in part 7. And the last part is reference.
+
+## IV. Data
+This study has two data set, one is survey data from the 2019 Canadian Election Study (http://www.ces-eec.ca/) and download it via the cesRR package (https://hodgettsp.github.io/cesR/), and another one is 2017 Canadian General Social Survey (GSS).
+
+```{r setup, include=F}
+library(tidyverse)
+library(knitr)
+library(ggpubr)
+# Loading in the cleaned survey data
+survey_data <- read_csv("/Users/helen/Documents/Courses/STA/STA304H1/Final Project/survey_data.csv")
+
+# Loading in the cleaned census data
+census_data <- read_csv("/Users/helen/Documents/Courses/STA/STA304H1/Final Project/census_data.csv")
+```
+
+(1) Survey Data: There are 620 variable in the raw data, and I choose:
++ cps19_votechoice: the choice of voter; fist drop the answer with no idea or NA, then I use this variable create 6 column stands for 6 party, e.g. column vote_liberal gives whether voter will vote for liberal party, if yes the value is 1, otherwise is 0; I choose this variable because we need the vote choice as for our study, and this variable is the important one in our study; the reason I didn't choose other variables is they cannot give the specific outcome like this; 
++ cps19_citizenship: the citizenship of the voter; this variable can filter the voter who don't have the right to vote for the election, such as if the voter's citizenship is permanent resident, then this voter can not vote for the election, so we need drop these voter;
++ cps19_province: the province the voter in; since Canada has 10 province and voter lives in different province have different life, so they may have different thought on which party is appropriate for Canada; here I drop "Yukon" since census data doesn't contain it;
++ cps19_education: the education level of the voter; with different education voter may has different policy in fiance, tax and so on, and each party has their own focus on their policies such as fiance, immigration, ...; difference in education level may influence voter perfer differnet policy;
++ cps19_gender: the gender of the voter; Canada is becoming more and more respectful of feminism, so I am interested in whether gender will influence the choice of voter; here I drop "both";
++ cps19_yob: the birth year of the voter; I create a new column called age_group with the birth year of voter and divided them in different age group; the reason I choose this variable is I think the length of the experience may affects voter's choices;
+
+(2) Census Data: There are 81 variables in the raw data, and I choose age, sex, education and province which are  correspond to the choices we made in survey data. After cleaning, I create a column n, which summarize the number of voter has same education level, same sex, live in same province, and in same age group. Thus there are only 603 rows in the final census data.
+
+* Here are the example of what survey data and census data look like:
+
+```{r, echo = FALSE, message = FALSE}
+#install.packages("kableExtra")
+library(kableExtra)
+kable(head(survey_data), caption = "Example of the Survey Data", digits = 5) %>%
+  kable_styling(font_size = 4)
+kable(head(census_data), caption = "Example of the Census Data", digits = 5)
+```
+
+## V. Model /  Methodology
+
+There are six main party (Liberal Party, Conservative Party, New Democratic Party, Bloc Québécois, Green Party and People's Party) and some other party (which we don't talk about them in our study, since the sum of their voted percentage is lower than 1%) participated in the 2019 Canadian Federal Election. We are interested in the vote percentage of the six party, so here we build six model for six party. We implement logistic regression model on the proportion of voters who will vote for each party using RStudio. There are four predictors in each model: age group, province, sex, and education. Since the response variable is binary, it is appropriate to adapt a logistic regression model. 
+
+* Here are boxplots for Voter's Choice and different explanatory variables in survey data.
+
+```{r, echo = FALSE}
+bar_1 <- ggplot(data = survey_data, aes(x =survey_data$votechoice, fill = survey_data$age_group)) +
+  geom_bar() + ## Create a bar chart.
+  theme(text = element_text(size = 4)) + ## Adjust the size of labels.
+  labs(x = "Age Group",
+       y = "Number",
+       fill = "Voter's Choice",
+       title = "Figure 1 - Bar Plot for Voter's Choice and Age Group") ## Add labels for x axis and y axis, and add title.
+
+bar_2 <- ggplot(data = survey_data, aes(x = survey_data$votechoice, fill = survey_data$sex)) +
+  geom_bar() + ## Create a bar chart.
+  theme(text = element_text(size = 4)) + ## Adjust the size of labels.
+  labs(x = "Sex",
+       y = "Number",
+       fill = "Voter's Choice",
+       title = "Figure 2 - Bar Plot for Voter's Choice and Sex") ## Add labels for x axis and y axis, and add title.
+
+bar_3 <- ggplot(data = survey_data, aes(x = survey_data$votechoice, fill = survey_data$province)) +
+  geom_bar() + ## Create a bar chart.
+  theme(text = element_text(size = 3)) + ## Adjust the size of labels.
+  labs(x = "Province",
+       y = "Number",
+       fill = "Voter's Choice",
+       title = "Figure 3 - Bar Plot for Voter's Choice and Province") ## Add labels for x axis and y axis, and add title.
+
+bar_4 <- ggplot(data = survey_data, aes(x = survey_data$votechoice, fill = survey_data$education)) +
+  geom_bar() + ## Create a bar chart.
+  theme(text = element_text(size = 4)) + ## Adjust the size of labels.
+  labs(x = "Education",
+       y = "Number",
+       fill = "Voter's Choice",
+       title = "Figure 4 - Bar Plot for Voter's Choice and Education") ## Add labels for x axis and y axis, and add title.
+
+ggarrange(bar_1, bar_2, bar_3, bar_4, ncol = 2, nrow = 2)
+```
+
+The number of people of different age groups participating in voting varies greatly, and the choices they make are also different. We divide age into five age groups because the range of age is large and there is only one data has numerical age. By grouping age, it’s easier for us to visualize the relationship among age groups. Since sex has two type -- male and female (we drop both in data part since there is no both in census data), then it is categorical variable. We choose sex because from the bar plot above we found that same party obtain different proportion in male and female.The province voter living is different, they will have different choice, such as, almost all voter in Quebec vote for Bloc Québécois, however, just few voter in Ontario vote for Bloc Québécois. Education is an important variable, it influence the vote percentage. For example, from the bar plot, bachelor more likely to vote Liberal Party. These four predictor are all categorical. 
+
+```{r, include = FALSE}
+# Build Liberal Model
+liberal_model = glm(vote_liberal ~ sex + age_group  + education + province,  data = survey_data, family = binomial)
+
+# Build Conservative Model
+conservative_model = glm(vote_conservative ~ sex + age_group  + education + province,  data = survey_data, family = binomial)
+
+# Build ndp Model
+ndp_model = glm(vote_ndp ~ sex + age_group  + education + province,  data = survey_data, family = binomial)
+
+# Build bq Model
+bq_model = glm(vote_bq ~ sex + age_group  + education + province,  data = survey_data, family = binomial)
+
+# Build Green Model
+green_model = glm(vote_green ~ sex + age_group  + education + province,  data = survey_data, family = binomial)
+
+# Build People's Model
+people_model = glm(vote_people ~ sex + age_group  + education + province,  data = survey_data, family = binomial)
+
+```
+
+- The estimated formula of logistic regression for Liberal Party's model is $log(\hat{p}^l/(1-{p}^l)) = \hat\beta_0^l + \hat\beta_1^lx_1 + \hat\beta_2^lx_2 + ... + \hat\beta_5^lx_5 + \hat\beta_6^lx_6 + ... + \hat\beta_{11}^{l}x_{11} + \hat\beta_{12}^{l}x_{12} + ... + \hat\beta_{20}^{l}x_{20}$, where $\hat{p}^l$ represents the probability that voter vote for Liberal Party.
+- The estimated formula of logistic regression for Conservative Party's model is $log(\hat{p}^c/(1-\hat{p}^c)) = \hat\beta_0^c + \hat\beta_1^cx_1 + \hat\beta_2^cx_2 + ... + \hat\beta_5^cx_5 + \hat\beta_6^cx_6 + ... + \hat\beta_{11}^{c}x_{11} + \hat\beta_{12}^{c}x_{12} + ... + \hat\beta_{20}^{c}x_{20}$, where $\hat{p}^c$ represents the probability that voter vote for Conservative Party.
+- The estimated formula of logistic regression for New Democratic Party's model is $log(\hat{p}^{nd}/(1-\hat{p}^{nd})) = \hat\beta_0^{nd} + \hat\beta_1^{nd}x_1 + \hat\beta_2^{nd}x_2 + ... + \hat\beta_5^{nd}x_5 + \hat\beta_6^{nd}x_6 + ... + \hat\beta_{11}^{nd}x_{11} + \hat\beta_{12}^{nd}x_{12} + ... + \hat\beta_{20}^{nd}x_{20}$, where $\hat{p}^{nd}$ represents the probability that voter vote for New Democratic Party.
+- The estimated formula of logistic regression for Bloc Québécois's model is $log(\hat{p}^b/(1-\hat{p}^b)) = \hat\beta_0^b + \hat\beta_1^bx_1 + \hat\beta_2^bx_2 + ... + \hat\beta_5^bx_5 + \hat\beta_6^bx_6 + ... + \hat\beta_{11}^{b}x_{11} + \hat\beta_{12}^{b}x_{12} + ... + \hat\beta_{20}^{b}x_{20}$, where $\hat{p}^b$ represents the probability that voter vote for Bloc Québécois Party.
+- The estimated formula of logistic regression for Green Party's model is $log(\hat{p}^g/(1-\hat{p}^g)) = \hat\beta_0^g + \hat\beta_1^gx_1 + \hat\beta_2^gx_2 + ... + \hat\beta_5^gx_5 + \hat\beta_6^gx_6 + ... + \hat\beta_{11}^{g}x_{11} + \hat\beta_{12}^{g}x_{12} + ... + \hat\beta_{20}^{g}x_{20}$, where $\hat{p}^g$ represents the probability that voter vote for Green Party.
+- The estimated formula of logistic regression for People's Party's model is $log(\hat{p}^r/(1-\hat{p}^r)) = \hat\beta_0^r + \hat\beta_1^rx_1 + \hat\beta_2^rx_2 + ... + \hat\beta_5^rx_5 + \hat\beta_6^rx_6 + ... + \hat\beta_{11}^{r}x_{11} + \hat\beta_{12}^{r}x_{12} + ... + \hat\beta_{20}^{r}x_{20}$, where $\hat{p}^r$ represents the probability that voter vote for People's Party.
+
+In above arguments, $x_1$ represent sex is male, $x_2$ to $x_5$ represent different age groups, $x_6$ to $x_{11}$ represent voters' different educational attainment, and $x_{12}$ to $x_{20}$ represent different province in the Canada. They are all dummy variable for example $x_1 = 1$ if the gender of voter is female, and $x_1 = 0$ if the voter is male. Similar for $x_2$ to $x_{20}$ In addition, when the voter is in age group 20-39, the education is above bachelor, lives in Alberta and is a female, the odds of this voter vote for Liberal Party is $exp(\hat\beta_0^l)$. Take the estimated coefficient $\hat\beta_2^l$ as an example, if the voter is a female, education is above bachelor, lives in Alberta but she is in age group 40 - 59, odd of this voter vote for Liberal Party will be change to $exp(\hat\beta_2^l)$. Other $\hat\beta_i^j$ for i={1, 2, ..., 20} and j = {l,c,nd,b,g,r} have the similar interpretation. The logistic model is practical because the data are extracted from national survey and census, which are real life data and we want the probability. The four predictors we selected provide sufficient information on voters’ demographics, building a logistic regression model on these predictors would give a relatively valid result.
+
+After these, we use post-stratification which is one of the stratification method in which a sample is first taken from a population using simple random sampling. Then the cells in the sample are stratified according to some characteristics. It can be applied when the population information is incomplete. And in general, its estimation efficiency is better than simple random sampling. Since we want to predict the vote percentage for each party, we start the post-stratification. Our choice of cells are based on different age group, sex, education and province. We generate the cells by considering all possible combinations of sex (2 categories),  age (5 categories), education (7 categories) and province (10 categories), thus partitioning the data into 700 cells. However there are only 603 cells actually, this is because some combination do not exist such as female voter who lives in Alberta and in age group 80 & above 80 don't have education background above Bachelor. We choose such cells because our model above contained all of the explanatory variable in cells. The main formula in this part is $\hat{y}^{ps}$ = $(\sum{{N_j}*\hat{y}_j}) / {\sum{N_j}}$. The process of post-stratification is first calculate the estimate of each cell. Since our model is a logistic model, we can not get estimate directly, for instance, we get ${a_i}$ = $log(estimate_i)$. Then use $estimate_i = e^{a_i}/(1+e^{a_i})$ get the real estimate. Now we can multiply $n_i$ (the size of this cell) by estimate, and do this for all cells and add these solution to our census_data.csv as a new column. In order to estimate the proportion of voters in cells, we will sum the value of $estimate_i*n_i$ and divide this sum by the entire population size. And we do this process for the six model we made above and then get the vote percentage for each party.
+
+```{r, echo = FALSE, include = FALSE}
+# Here I will perform the post-stratification calculation for liberay party
+census_data$logodds_liberal <- liberal_model %>%
+  predict(newdata = census_data)
+
+census_data$estimate_liberal <-
+  exp(census_data$logodds_liberal)/(1+exp(census_data$logodds_liberal))
+
+census_data %>%
+  mutate(liberal_predict_prop = estimate_liberal*n) %>%
+  summarise(liberal_predict = sum(liberal_predict_prop)/sum(n))
+
+# Here I will perform the post-stratification calculation for conservative party 
+census_data$logodds_conservative <- conservative_model %>%
+  predict(newdata = census_data)
+
+census_data$estimate_conservative <-
+  exp(census_data$logodds_conservative)/(1+exp(census_data$logodds_conservative))
+
+census_data %>%
+  mutate(conservative_predict_prop = estimate_conservative*n) %>%
+  summarise(conservative_predict = sum(conservative_predict_prop)/sum(n))
+
+# Here I will perform the post-stratification calculation for ndp
+census_data$logodds_ndp <- ndp_model %>%
+  predict(newdata = census_data)
+
+census_data$estimate_ndp <-
+  exp(census_data$logodds_ndp)/(1+exp(census_data$logodds_ndp))
+
+census_data %>%
+  mutate(ndp_predict_prop = estimate_ndp*n) %>%
+  summarise(ndp_predict = sum(ndp_predict_prop)/sum(n))
+
+# Here I will perform the post-stratification calculation for bq
+census_data$logodds_bq <- bq_model %>%
+  predict(newdata = census_data)
+
+census_data$estimate_bq <-
+  exp(census_data$logodds_bq)/(1+exp(census_data$logodds_bq))
+
+census_data %>%
+  mutate(bq_predict_prop = estimate_bq*n) %>%
+  summarise(bq_predict = sum(bq_predict_prop)/sum(n))
+
+# Here I will perform the post-stratification calculation for green party
+census_data$logodds_green <- green_model %>%
+  predict(newdata = census_data)
+
+census_data$estimate_green <-
+  exp(census_data$logodds_green)/(1+exp(census_data$logodds_green))
+
+census_data %>%
+  mutate(green_predict_prop = estimate_green*n) %>%
+  summarise(green_predict = sum(green_predict_prop)/sum(n))
+
+# Here I will perform the post-stratification calculation for people's party
+census_data$logodds_people <- people_model %>%
+  predict(newdata = census_data)
+
+census_data$estimate_people <-
+  exp(census_data$logodds_people)/(1+exp(census_data$logodds_people))
+
+census_data %>%
+  mutate(people_predict_prop = estimate_people*n) %>%
+  summarise(people_predict = sum(people_predict_prop)/sum(n))
+```
+
+# VI. Result
+
+* Here are the baseline characteristics of survey data:
+(1) Age Group: 20-39
+(2) Education: above Bachelor
+(3) Province: Alberta
+(4) Sex: Female
+
+* Here are the post-stratification estimates:
+$$ \hat{y}_l^{ps} = 0.3310 $$
+$$ \hat{y}_c^{ps} = 0.3390 $$
+$$ \hat{y}_{nd}^{ps} = 0.1499 $$
+$$ \hat{y}_b^{ps} = 0.5078 $$
+$$ \hat{y}_g^{ps} = 0.9942 $$
+$$ \hat{y}_r^{ps} = 0.2411 $$
+Base on the process in post-stratification, we estimate that the percentage of voter who would vote for Liberal Party ( $\hat{y}_l^{ps}$) to be 33.10%. We estimate that the percentage of voter who would vote for Conservative Party ( $\hat{y}_c^{ps}$) to be 33.90%. We estimate that the percentage of voter who would vote for New Democratic Party ( $\hat{y}_{nd}^{ps}$) to be 14.99%. We estimate that the percentage of voter who would vote for Bloc Québécois ( $\hat{y}_b^{ps}$) to be 5.07%. We estimate that the percentage of voter who would vote for Green Party ( $\hat{y}_g^{ps}$) to be 9.94%. We estimate that the percentage of voter who would vote for People's Party ( $\hat{y}_r^{ps}$) to be 2.41%. These result is from our post-stratification analysis of the  vote percentage for each party by a logistic model, which accounted for age group, sex, province and education.
+
+* Here is the table of our model outcomes:
+
+For the six table below shows the coefficients of our model. The first column is the name of variable, the second column is the value of $\hat\beta_i^j$ where i={0, 1, ..., 20}, the third column is the standard error of estimates and j = {l,c,nd,b,g,r} and the last column is the p-value (if p-value is smaller than 0.05 we will reject $H_0$ = 0, and the t test is significant).
+
+When the voter is in age group 20-39, the education is above bachelor, lives in Alberta and is a female, the odds of this voter vote for Liberal Party is $exp(-1.27156)$. Take the estimated coefficient $\hat\beta_2^l$ as an example, if the voter is a female, education is above bachelor, lives in Alberta but she is in age group 40 - 59, odd of this voter vote for Liberal Party will be change to $exp(0.08078)$. Other $\hat\beta_i^j$ for i={1, 2, ..., 20} and j = {l,c,nd,b,g,r} have the similar interpretation. 
+
+- The estimated formula of logistic regression for Liberal Party's model is $log(\hat{p}^l/(1-\hat{p}^l)) = \hat\beta_0^l + \hat\beta_1^lx_1 + \hat\beta_2^lx_2 + ... + \hat\beta_5^lx_5 + \hat\beta_6^lx_6 + ... + \hat\beta_{11}^{l}x_{11} + \hat\beta_{12}^{l}x_{12} + ... + \hat\beta_{20}^{l}x_{20}$, where $\hat{p}^l$ represents the probability that voter vote for Liberal Party.
+
+```{r, echo = FALSE}
+kable(summary(liberal_model)$coefficients, caption = "Summary of Vote Liberal Party Logistic Model", digits = 5)
+
+kable(summary(conservative_model)$coefficients, caption = "Summary of Vote Conservative Party Logistic Model", digits = 5)
+
+kable(summary(ndp_model)$coefficients, caption = "Summary of Vote New Democratic Party Logistic Model", digits = 5)
+
+kable(summary(bq_model)$coefficients, caption = "Summary of Vote Bloc Québécois Logistic Model", digits = 5)
+
+kable(summary(green_model)$coefficients, caption = "Summary of Vote Green Party Logistic Model", digits = 5)
+
+kable(summary(people_model)$coefficients, caption = "Summary of Vote People's Party Logistic Model", digits = 5)
+```
+
+## VII. Discussion
+
+### A. Summary
+The purpose of our study is to predict if the result of 2019 Canadian Federal Election will change if "everyone" had voted. We find survey data from the 2019 Canadian Election Study (http://www.ces-eec.ca/) and download it via the cesRR package (https://hodgettsp.github.io/cesR/), and our census data is 2017 Canadian General Social Survey (GSS). After cleaning these two data set, we use survey data to build our logistic model for the six party and do post-stratification base on census data. Now we obtain the estimated vote percentage for each party if "everyone" had voted in the 2019 Canadian Federal Election.
+
+### B. Conclusion
+For each of the predictive variables we used in our prediction, trends in each characteristic of voters can be clearly seen. Most voter who are under 20 will choose to vote for Liberal Party, most female voter will vote for Liberal Party, most voter live in Quebuc will vote for Bloc Québécois and most voter whose education background is non-university will vote for Conservaative part. We obtain the estimated vote percentage of Liberal Party is 33.10%, the estimated vote percentage of Conservative Party is 33.90%, the estimated vote percentage of New Democratic Party is 14.99%, the estimated vote percentage of Bloc Québécois is 5.08%, the estimated vote percentage of Green Party is 9.94% and the estimated vote percentage of People's Party is 2.41%. 
+
+I found the real value on Wikipedia -- 33.1% for Liberal Party, 34.3% for Conservative Party, 16.0 for New Democratic Party, 7.6% for Bloc Québécois, 6.5% for Green and 0.4% for other party. Here we can conclude that whether "everyone" voted, Conservative Party has the highest vote percentage. However, this percentage is lower than 50% and is very close to the vote percentage for Liberal Party. Base on our results, if "everyone" had voted, the difference between Conservative Party and Liberal Party will decrease, which means the vote percentage of Conservative Party will decrease. Maybe most of those who did not vote for the 2019 Canadian federal election will vote for Liberal Party. The vote percentage of Bloc Québécois and New Democratic will decrease, and the vote percentage of Green and People's Party will increase. If we sum these six percentage, we can find there is still 0.58% remains, which means 0.58% will vote for other parties.
+
+### C. Weakness & Next Steps
+Here in our study, when we clean data, we fold some gourps such as education background is Phd. These would decrease the accuracy of our prediction in the post-stratification. From table 2-7, we observed that some p-value is larger than 0.05 (can not reject $H_0$ = 0), which means they are not good for our model. So next we may use AIC / BIC forward or backward Elimination to pick the appropriate predictor. Another point is our census data has many variable which seems can be predictor. However, our survey data has few variables, and some variables we can not use in our study. So if possible, we can find more data to build our model. Our model in this study is logistic model, since some parameter may vary at more than one level after we add more predictor, so we can try Multilevel Regression model.
+
+# VIII. References
+
+### 1. Datasets
+
+Beaupre, Pascale. *General Social Survey Cycle 31: Families*, *2020*.
+  Statistics Canada Minister of Industry [distributor]. Web. April 2020. 
+
+Stephenson, Laura B; Harell, Allison; Rubenson, Daniel; Loewen, Peter John, 2020, “2019 Canadian Election Study - Online Survey”, https://doi.org/10.7910/DVN/DUS88V, Harvard Dataverse, V1
+Documentation for the 2019 CES Online Survey can be accessed from here: https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/DUS88V
+
+### 2. Software
+
+RStudio Team (2020). RStudio: Integrated Development for R. RStudio, PBC,
+  Boston, MA URL http://www.rstudio.com/.
+  
+### 3. Packages
+
+Alboukadel Kassambara (2020). ggpubr: 'ggplot2' Based Publication Ready Plots. R package version 0.4.0.
+  https://CRAN.R-project.org/package=ggpubr
+  
+David Robinson, Alex Hayes and Simon Couch (2020). broom: Convert Statistical Objects into Tidy Tibbles. R package version
+  0.7.0. https://CRAN.R-project.org/package=broom
+
+Wickham et al., (2019). Welcome to the tidyverse. Journal of Open Source Software, 4(43), 1686,  https://doi.org/10.21105/joss.01686
+
+Yihui Xie (2020). knitr: A General-Purpose Package for Dynamic Report Generation in R. R package version 1.29.
+
+Hao Zhu, kableExtra: Construct Complex Table with 'kable' and Pipe Syntax
+https://cran.r-project.org/web/packages/kableExtra/kableExtra.pdf
+
+### 4. Websites
+
+How to change font size of table in Rmarkdown, LaTeX and .pdf?
+https://stackoverflow.com/questions/44490209/how-to-change-font-size-of-table-in-rmarkdown-latex-and-pdf 
+
+
+Results of the 2019 Canadian federal election
+https://en.wikipedia.org/wiki/Results_of_the_2019_Canadian_federal_election
+
+
+
+
+
+
+
+
